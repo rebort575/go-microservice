@@ -1,4 +1,5 @@
 broker-service/brokerApp
 front-end/frontApp
 authentication-service/AuthApp
-.idea/*
+.idea/
+db-data/

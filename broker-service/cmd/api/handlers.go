@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"io"
 	"log"
 	"net/http"
 )
@@ -11,11 +12,17 @@ import (
 type RequestPayload struct {
 	Action string      `json:"action"`
 	Auth   AuthPayload `json:"auth,omitempty"`
+	Log    LogPayload  `json:"log,omitempty"`
 }
 
 type AuthPayload struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
+}
+
+type LogPayload struct {
+	Name string `json:"name"`
+	Data string `json:"data"`
 }
 
 func (app *Config) Broker(w http.ResponseWriter, r *http.Request) {
@@ -38,9 +45,53 @@ func (app *Config) HandleSubmission(w http.ResponseWriter, r *http.Request) {
 	switch requestPayload.Action {
 	case "auth":
 		app.authenticate(w, requestPayload.Auth)
+	case "log":
+		app.logItem(w, requestPayload.Log)
 	default:
 		_ = app.errorJson(w, errors.New("unknown action"))
 	}
+}
+
+func (app *Config) logItem(w http.ResponseWriter, entry LogPayload) {
+	jsonData, _ := json.MarshalIndent(entry, "", "\t")
+
+	request, err := http.NewRequest("POST", "http://logger-service/log", bytes.NewBuffer(jsonData))
+	if err != nil {
+		_ = app.errorJson(w, err)
+		return
+	}
+	request.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	response, err := client.Do(request)
+	if err != nil {
+		_ = app.errorJson(w, err)
+		return
+	}
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(response.Body)
+
+	if response.StatusCode != http.StatusAccepted {
+		_ = app.errorJson(w, errors.New("error calling logger service"))
+		return
+	}
+
+	var jsonFromService jsonResponse
+	err = json.NewDecoder(response.Body).Decode(&jsonFromService)
+	if err != nil {
+		_ = app.errorJson(w, err)
+		return
+	}
+	if jsonFromService.Error {
+		_ = app.errorJson(w, err)
+	}
+
+	var payload jsonResponse
+	payload.Error = false
+	payload.Message = "Logged!"
+
+	_ = app.writeJson(w, http.StatusAccepted, payload)
 }
 
 func (app *Config) authenticate(w http.ResponseWriter, a AuthPayload) {
@@ -53,13 +104,17 @@ func (app *Config) authenticate(w http.ResponseWriter, a AuthPayload) {
 		_ = app.errorJson(w, err)
 		return
 	}
+	request.Header.Set("Content-Type", "application/json")
+
 	client := &http.Client{}
 	response, err := client.Do(request)
 	if err != nil {
 		_ = app.errorJson(w, err)
 		return
 	}
-	defer response.Body.Close()
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(response.Body)
 
 	// make sure  we get back the correct status code
 	if response.StatusCode == http.StatusUnauthorized {
