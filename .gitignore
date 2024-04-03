@@ -1,5 +1,7 @@
 broker-service/brokerApp
 front-end/frontApp
+mail-service/mailerApp
+logger-service/loggerServiceApp
 authentication-service/AuthApp
 .idea/
 db-data/
