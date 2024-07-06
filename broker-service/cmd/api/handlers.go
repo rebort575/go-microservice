@@ -5,9 +5,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"net/rpc"
 )
 
 type RequestPayload struct {
@@ -54,7 +56,13 @@ func (app *Config) HandleSubmission(w http.ResponseWriter, r *http.Request) {
 	case "auth":
 		app.authenticate(w, requestPayload.Auth)
 	case "log":
-		app.LogEventViaRabbit(w, requestPayload.Log)
+		// log via RPC
+		app.logItemViaRPC(w, requestPayload.Log)
+
+		// log via mq
+		// app.LogEventViaRabbit(w, requestPayload.Log)
+
+		// log via http
 		//app.logItem(w, requestPayload.Log)
 	case "mail":
 		app.sendMail(w, requestPayload.Mail)
@@ -151,6 +159,7 @@ func (app *Config) authenticate(w http.ResponseWriter, a AuthPayload) {
 	// create some json we'll send to auth microservice
 	jsonData, _ := json.MarshalIndent(a, "", "\t")
 
+	fmt.Println("receive authenticate")
 	// call the service
 	request, err := http.NewRequest("POST", "http://authentication-service/authenticate", bytes.NewBuffer(jsonData))
 	if err != nil {
@@ -224,4 +233,34 @@ func (app *Config) pushToQueue(name, msg string) error {
 	err = emitter.Push(string(j), "log.INFO")
 	log.Println("pushToQueue ", string(j))
 	return err
+}
+
+type RPCPayload struct {
+	Name string
+	Data string
+}
+
+func (app *Config) logItemViaRPC(w http.ResponseWriter, l LogPayload) {
+	client, err := rpc.Dial("tcp", "logger-service:5001")
+	if err != nil {
+		app.errorJson(w, err)
+		log.Println("Dial failed ", err)
+		return
+	}
+	rpcPayload := RPCPayload{
+		Name: l.Name,
+		Data: l.Data,
+	}
+	var result string
+	err = client.Call("RPCServer.LogInfo", rpcPayload, &result)
+	if err != nil {
+		app.errorJson(w, err)
+		log.Println("call RPC failed ", err)
+		return
+	}
+	payload := jsonResponse{
+		Error:   false,
+		Message: result,
+	}
+	app.writeJson(w, http.StatusAccepted, payload)
 }

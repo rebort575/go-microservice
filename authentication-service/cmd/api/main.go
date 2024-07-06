@@ -38,6 +38,19 @@ func main() {
 		Models: data.New(conn),
 	}
 
+	// for test
+	testUser := data.User{
+		1,
+		"admin@example.com",
+		"FirstName",
+		"LastName",
+		"verysecret",
+		1,
+		time.Now(),
+		time.Now(),
+	}
+	app.Models.User.Insert(testUser)
+
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%s", webPort),
 		Handler: app.routes(),
