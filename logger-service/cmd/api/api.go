@@ -15,7 +15,7 @@ type RPCPayload struct {
 }
 
 func (r *RPCServer) LogInfo(payload RPCPayload, resp *string) error {
-	log.Println("receive rpc LogInfo")
+	log.Println("receive rpc LogInfo ", payload.Name, ", ", payload.Data)
 	collection := client.Database("logs").Collection("logs")
 	_, err := collection.InsertOne(context.TODO(), data.LogEntry{
 		Name:      payload.Name,

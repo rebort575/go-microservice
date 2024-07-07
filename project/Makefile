@@ -52,7 +52,7 @@ build_logger:
 ## build_front: builds the listener binary
 build_listener:
 	@echo "Building listener binary..."
-	cd ../listener-service && env CGO_ENABLED=0 go build -o ${LISTENER_BINARY} ./
+	cd ../listener-service && env GOOS=linux CGO_ENABLED=0 go build -o ${LISTENER_BINARY} ./
 	@echo "Done!"
 
 ## build_front: builds the front end binary
